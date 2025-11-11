@@ -1,102 +1,70 @@
 package com.dao;
 
-import com.pept.model.User;
-import java.sql.*;
+import com.model.User;
+import com.util.DBConnection;
 
-/**
- * UserDAO.java
- * Handles all database operations for the User entity.
- * NOTE: In a production environment, database connection details and utility 
- * methods (like getConnection) would be handled by a separate, robust DBUtil 
- * class or a connection pool.
- */
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
 public class UserDAO {
 
-    // --- JDBC Connection Details (Placeholder - Update with your settings) ---
-    private static final String JDBC_DRIVER = "com.mysql.cj.jdbc.Driver";
-    private static final String DB_URL = "jdbc:mysql://localhost:3306/pept_db?useSSL=false&serverTimezone=UTC";
-    private static final String DB_USER = "your_db_username";
-    private static final String DB_PASS = "your_db_password";
-    // -----------------------------------------------------------------------
+    private static final String SELECT_USER_BY_EMAIL = "SELECT user_id, email, password_hash, name, role FROM users WHERE email = ?";
+    private static final String INSERT_USER = "INSERT INTO users (user_id, email, password_hash, name, role) VALUES (?, ?, ?, ?, ?)";
+    private static final String SELECT_ALL_EMPLOYEES = "SELECT * FROM users WHERE role = 'employee'";
 
-    // SQL Queries
-    private static final String SELECT_USER_BY_USERNAME = 
-        "SELECT u.user_id, u.username, u.password_hash, u.full_name, u.email, u.role_id, r.role_name " +
-        "FROM Users u JOIN Roles r ON u.role_id = r.role_id WHERE u.username = ?";
-    
-    private static final String INSERT_USER = 
-        "INSERT INTO Users (username, password_hash, full_name, email, role_id) VALUES (?, ?, ?, ?, ?)";
-        
-    /**
-     * Helper method to establish a database connection.
-     * @return Connection object
-     * @throws SQLException
-     */
-    private Connection getConnection() throws SQLException {
-        try {
-            Class.forName(JDBC_DRIVER);
-        } catch (ClassNotFoundException e) {
-            System.err.println("JDBC Driver not found: " + e.getMessage());
-            throw new SQLException("Database driver not available.", e);
-        }
-        return DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
-    }
-
-    /**
-     * Retrieves a user by their username, including their role name.
-     * This is the primary method used during the login process.
-     *
-     * @param username The username to search for.
-     * @return A User object if found, or null otherwise.
-     */
-    public User findByUsername(String username) {
+    public User authenticate(String email, String plainPassword) throws SQLException {
         User user = null;
-        try (Connection connection = getConnection();
-             PreparedStatement preparedStatement = connection.prepareStatement(SELECT_USER_BY_USERNAME)) {
-
-            preparedStatement.setString(1, username);
-            try (ResultSet rs = preparedStatement.executeQuery()) {
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(SELECT_USER_BY_EMAIL)) {
+            ps.setString(1, email);
+            try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
-                    user = new User(
-                        rs.getInt("user_id"),
-                        rs.getString("username"),
-                        rs.getString("password_hash"),
-                        rs.getString("full_name"),
-                        rs.getString("email"),
-                        rs.getInt("role_id"),
-                        rs.getString("role_name")
-                    );
+                    String storedPasswordHash = rs.getString("password_hash");
+                    if (plainPassword.equals(storedPasswordHash)) {
+                        user = new User();
+                        user.setId(rs.getString("user_id"));
+                        user.setEmail(rs.getString("email"));
+                        user.setPasswordHash(storedPasswordHash);
+                        user.setName(rs.getString("name"));
+                        user.setRole(rs.getString("role"));
+                    }
                 }
             }
-        } catch (SQLException e) {
-            // Log the exception in a real application
-            e.printStackTrace();
         }
         return user;
     }
 
-    /**
-     * Saves a new user record to the database.
-     * @param user The User object to save.
-     * @return true if the insertion was successful, false otherwise.
-     */
-    public boolean saveUser(User user) {
-        int result = 0;
-        try (Connection connection = getConnection();
-             PreparedStatement preparedStatement = connection.prepareStatement(INSERT_USER)) {
-
-            preparedStatement.setString(1, user.getUsername());
-            preparedStatement.setString(2, user.getPasswordHash());
-            preparedStatement.setString(3, user.getFullName());
-            preparedStatement.setString(4, user.getEmail());
-            preparedStatement.setInt(5, user.getRoleId());
-
-            result = preparedStatement.executeUpdate();
-
-        } catch (SQLException e) {
-            // Log the exception, especially for duplicate key errors (username/email)
-            e.printStackTrace();
+    public boolean createUser(String email, String plainPassword, String name, String role) throws SQLException {
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(INSERT_USER)) {
+            ps.setString(1, UUID.randomUUID().toString());
+            ps.setString(2, email);
+            ps.setString(3, plainPassword);
+            ps.setString(4, name);
+            ps.setString(5, role);
+            return ps.executeUpdate() > 0;
         }
-        return result > 0;
+    }
+
+    public List<User> getAllEmployees() throws SQLException {
+        List<User> employees = new ArrayList<>();
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(SELECT_ALL_EMPLOYEES);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                User user = new User();
+                user.setId(rs.getString("user_id"));
+                user.setEmail(rs.getString("email"));
+                user.setName(rs.getString("name"));
+                user.setRole(rs.getString("role"));
+                employees.add(user);
+            }
+        }
+        return employees;
     }
 }

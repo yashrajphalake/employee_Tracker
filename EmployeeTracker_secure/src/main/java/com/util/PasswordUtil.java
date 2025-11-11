@@ -1,4 +1,4 @@
-package com.pept.util;
+package com.util;
 
 /**
  * PasswordUtil.java

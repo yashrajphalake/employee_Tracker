@@ -1,4 +1,4 @@
-package com.pept.controller;
+package com.servlet.controller;
 
 import java.io.IOException;
 import javax.servlet.ServletException;
