@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flask Auth Client</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for background and font */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fb;
+        }
+        .card {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .form-input {
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+        .form-input:focus {
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <!-- Main Container -->
+    <div id="auth-container" class="w-full max-w-md bg-white p-8 rounded-xl card transition-all duration-300">
+        <h1 id="form-title" class="text-3xl font-bold text-gray-800 mb-6 text-center">Register</h1>
+        
+        <!-- Message Box for Feedback -->
+        <div id="message-box" class="hidden p-3 mb-4 rounded-lg text-sm transition-opacity duration-300 opacity-0" role="alert"></div>
+
+        <!-- Registration Form -->
+        <form id="register-form" class="space-y-4">
+            <div>
+                <label for="reg-username" class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                <input type="text" id="reg-username" required class="form-input w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none" autocomplete="username">
+            </div>
+            <div>
+                <label for="reg-email" class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input type="email" id="reg-email" required class="form-input w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none" autocomplete="email">
+            </div>
+            <div>
+                <label for="reg-password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <input type="password" id="reg-password" required class="form-input w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none" autocomplete="new-password">
+            </div>
+            <button type="submit" id="register-button" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50">
+                Register
+            </button>
+        </form>
+
+        <!-- Login Form (Initially Hidden) -->
+        <form id="login-form" class="space-y-4 hidden">
+            <div>
+                <label for="login-username" class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                <input type="text" id="login-username" required class="form-input w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none" autocomplete="username">
+            </div>
+            <div>
+                <label for="login-password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <input type="password" id="login-password" required class="form-input w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none" autocomplete="current-password">
+            </div>
+            <button type="submit" id="login-button" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-green-500 focus:ring-opacity-50">
+                Login
+            </button>
+        </form>
+
+        <!-- Toggle Link -->
+        <p class="mt-6 text-center text-sm">
+            Already have an account? 
+            <a href="#" id="toggle-auth" class="text-indigo-600 hover:text-indigo-800 font-medium transition duration-200">
+                Switch to Login
+            </a>
+        </p>
+
+    </div>
+
+    <!-- User Dashboard (Hidden after successful login) -->
+    <div id="dashboard" class="w-full max-w-lg bg-white p-8 rounded-xl card hidden">
+        <h2 class="text-3xl font-bold text-gray-800 mb-4">Welcome Back!</h2>
+        <p class="text-gray-600 mb-4">You are successfully authenticated against the Flask server.</p>
+        <div class="space-y-3 p-4 bg-gray-50 rounded-lg border">
+            <p class="text-sm font-medium text-gray-700">Username: <span id="dash-username" class="font-semibold text-indigo-600"></span></p>
+            <p class="text-sm font-medium text-gray-700">Email: <span id="dash-email" class="font-semibold text-indigo-600"></span></p>
+        </div>
+        <button id="logout-button" class="mt-6 w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-2 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-red-500 focus:ring-opacity-50">
+            Logout
+        </button>
+    </div>
+
+
+    <script>
+        // --- Configuration ---
+        const API_BASE_URL = 'http://127.0.0.1:5000/api'; // Ensure this matches your Flask port
+
+        // --- DOM Elements ---
+        const authContainer = document.getElementById('auth-container');
+        const dashboard = document.getElementById('dashboard');
+        const messageBox = document.getElementById('message-box');
+        const formTitle = document.getElementById('form-title');
+        const toggleAuthLink = document.getElementById('toggle-auth');
+        const registerForm = document.getElementById('register-form');
+        const loginForm = document.getElementById('login-form');
+        const logoutButton = document.getElementById('logout-button');
+        
+        let isLoginView = false;
+
+        // --- Utility Functions ---
+
+        /**
+         * Displays a formatted message to the user.
+         * @param {string} message - The text content of the message.
+         * @param {string} type - 'success' or 'error'.
+         */
+        function showMessage(message, type = 'error') {
+            const classes = {
+                success: 'bg-green-100 text-green-800 border border-green-300',
+                error: 'bg-red-100 text-red-800 border border-red-300'
+            };
+
+            messageBox.textContent = message;
+            // Clear existing type classes
+            messageBox.className = 'p-3 mb-4 rounded-lg text-sm transition-opacity duration-300';
+            messageBox.classList.add(classes[type]);
+            messageBox.classList.remove('hidden', 'opacity-0');
+            messageBox.classList.add('opacity-100');
+
+            setTimeout(() => {
+                messageBox.classList.add('opacity-0');
+                // Hide fully after transition
+                setTimeout(() => messageBox.classList.add('hidden'), 300); 
+            }, 5000);
+        }
+        
+        /**
+         * Toggles between the Register and Login forms.
+         */
+        function toggleAuthView() {
+            isLoginView = !isLoginView;
+            
+            if (isLoginView) {
+                formTitle.textContent = 'Login';
+                registerForm.classList.add('hidden');
+                loginForm.classList.remove('hidden');
+                toggleAuthLink.textContent = 'Need an account? Switch to Register';
+            } else {
+                formTitle.textContent = 'Register';
+                loginForm.classList.add('hidden');
+                registerForm.classList.remove('hidden');
+                toggleAuthLink.textContent = 'Already have an account? Switch to Login';
+            }
+            // Clear any previous messages on switch
+            messageBox.classList.add('hidden');
+        }
+
+        /**
+         * Displays the dashboard and hides the auth forms.
+         * @param {Object} userData - Contains username and email.
+         */
+        function showDashboard(userData) {
+            document.getElementById('dash-username').textContent = userData.username;
+            document.getElementById('dash-email').textContent = userData.email;
+
+            authContainer.classList.add('hidden');
+            dashboard.classList.remove('hidden');
+        }
+
+        /**
+         * Hides the dashboard and shows the login/register forms.
+         */
+        function showAuthForms() {
+            // Clear inputs and set back to default view
+            registerForm.reset();
+            loginForm.reset();
+            isLoginView = true; // Force switch to Register view next
+            toggleAuthView(); 
+
+            dashboard.classList.add('hidden');
+            authContainer.classList.remove('hidden');
+            showMessage("You have been logged out.", 'success');
+        }
+
+        /**
+         * Handles the API fetch request.
+         * @param {string} endpoint - '/register' or '/login'.
+         * @param {Object} data - Payload data.
+         * @returns {Promise<Object>} API response data.
+         */
+        async function fetchApi(endpoint, data) {
+            const url = `${API_BASE_URL}${endpoint}`;
+            
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data),
+                });
+                
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    // Handle non-200 responses (e.g., 401, 409, 400)
+                    throw new Error(result.message || `HTTP Error: ${response.status}`);
+                }
+                
+                return result;
+                
+            } catch (error) {
+                console.error("API Call Error:", error.message);
+                throw error;
+            }
+        }
+
+        // --- Event Handlers ---
+
+        toggleAuthLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            toggleAuthView();
+        });
+
+        registerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const button = document.getElementById('register-button');
+            button.disabled = true;
+            button.textContent = 'Registering...';
+
+            const username = document.getElementById('reg-username').value;
+            const email = document.getElementById('reg-email').value;
+            const password = document.getElementById('reg-password').value;
+
+            try {
+                const data = await fetchApi('/register', { username, email, password });
+                showMessage(`Success! User ${data.username} registered. Please log in.`, 'success');
+                // Auto-switch to login form after successful registration
+                toggleAuthView();
+            } catch (error) {
+                showMessage(error.message);
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Register';
+            }
+        });
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const button = document.getElementById('login-button');
+            button.disabled = true;
+            button.textContent = 'Logging In...';
+
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+
+            try {
+                const data = await fetchApi('/login', { username, password });
+                
+                // On successful login, switch to dashboard view
+                showDashboard(data);
+                showMessage(`Welcome, ${data.username}!`, 'success');
+                
+            } catch (error) {
+                showMessage(error.message);
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Login';
+            }
+        });
+        
+        logoutButton.addEventListener('click', showAuthForms);
+
+
+    </script>
+</body>
+</html>
