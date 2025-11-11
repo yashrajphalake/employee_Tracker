@@ -6,17 +6,18 @@
 
   # Use https://search.nixos.org/packages to find packages
   packages = [
-    pkgs.jdk
+    pkgs.jdk8
     pkgs.maven
     pkgs.tomcat9
   ];
 
   # Sets environment variables in the workspace
-  env = {};
+  env = {
+    TOMCAT_HOME = "${pkgs.tomcat9}";
+  };
   idx = {
     # Search for the extensions you want on https://open-vsx.org/ and use "publisher.id"
     extensions = [
-      # "vscodevim.vim"
       "vscjava.vscode-java-pack"
     ];
 
@@ -28,7 +29,7 @@
           command = [
             "sh"
             "-c"
-            "mvn -f EmployeeTracker_secure/pom.xml clean install && cp EmployeeTracker_secure/target/EmployeeTracker.war $TOMCAT_HOME/webapps/ && catalina.sh run"
+            "export CATALINA_BASE=$HOME/tomcat_base && mkdir -p $CATALINA_BASE && cp -r $TOMCAT_HOME/conf $CATALINA_BASE/ && mkdir -p $CATALINA_BASE/webapps && mvn -f EmployeeTracker_secure/pom.xml clean install && cp EmployeeTracker_secure/target/EmployeeTracker.war $CATALINA_BASE/webapps/ROOT.war && catalina.sh run"
           ];
           manager = "web";
         };
@@ -38,15 +39,9 @@
     # Workspace lifecycle hooks
     workspace = {
       # Runs when a workspace is first created
-      onCreate = {
-        # Example: install JS dependencies from NPM
-        # npm-install = "npm install";
-      };
+      onCreate = {};
       # Runs when the workspace is (re)started
-      onStart = {
-        # Example: start a background task to watch and re-build backend code
-        # watch-backend = "npm run watch-backend";
-      };
+      onStart = {};
     };
   };
 }
